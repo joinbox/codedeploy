@@ -6,6 +6,7 @@ scriptDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # args passed
 vendor=$1
 repository=$2
+installEnv=$3
 remote="git@github.com:$vendor/$repository.git"
 
 
@@ -22,7 +23,14 @@ if [ -z "$2" ]; then
     exit 1;
 fi
 
+# check parameters
+if [ -z "$3" ]; then
+    echo "parameter 3 to the the deployr command must be the environment to deploy to!"
+    exit 1;
+fi
 
+
+echo -e "\e[32mAutodeploy for $vendor/$repository and env $installEnv initialized ...\033[0m"
 
 
 
@@ -36,12 +44,19 @@ if [ ! -d "$masterPath" ]; then
     git clone "$remote" ./
 else
     cd "$masterPath"
+    git pull
 fi
+
+
 
 
 
 # get all branches as array
 read -a branches <<<$(git branch -r | cut -c 10- | tail -n +2)
+
+# add master
+#branches+=('master')
+
 
 # loop over all branches
 for branch in "${branches[@]}"; do
@@ -49,7 +64,7 @@ for branch in "${branches[@]}"; do
     cd "$masterPath"
 
     # check if the branch wants to be deployed
-    git cat-file -e "origin/$branch:.deploy/deploy.sh" > /dev/null 2>&1
+    git cat-file -e "origin/$branch:.deploy" > /dev/null 2>&1
     if [ $? -eq 0 ]; then
 
         # define paths
@@ -58,7 +73,6 @@ for branch in "${branches[@]}"; do
         serviceName=$(echo "$vendor_$repository_$branch" | sed -r 's/([a-z]+)_([a-z])([a-z]+)/\1\U\2\L\3/')
 
         
-
         echo -e "\e[92mChecking FOR branch $vendor/$repository:$branch ..."
 
         # create directories, clone git if required
@@ -82,9 +96,9 @@ for branch in "${branches[@]}"; do
 
 
         # execute install script if present
-        if [ -f "$branchPath/.autorelease.staging.sh" ]; then
-            echo -e "\e[92mExecuting the .autorelease.staging.sh file ...\033[0m"
-            source "$branchPath/.autorelease.staging.sh"
+        if [ -f "$branchPath/.deploy/$installEnv/autorelease.sh" ]; then
+            echo -e "\e[92mExecuting the $installEnv autorelease.sh file ...\033[0m"
+            source "$branchPath/.deploy/$installEnv/autorelease.sh" $branchPath $scriptDir
         fi
 
 
@@ -92,43 +106,95 @@ for branch in "${branches[@]}"; do
 
 
         # check if we need to setup a nginx config
-        if [ -f "$branchPath/.nginx.staging.conf" ]; then
-            nginxConfig="/etc/nginx/site_available/$serviceName.conf"
-
-            if [ ! -f "$nginxConfig" ]; then
-                echo "\e[92mInstalling the nginx config file ...\033[0m"
-                cp "$branchPath/.nginx.staging.conf" "$nginxConfig"
-
-                # enable site
-                ln -s "$nginxConfig" "/etc/nginx/sites_enabled/$serviceName.conf"
-            fi
+        if [ -d "$branchPath/.deploy/$installEnv/nginx" ]; then
 
             # make sure nginx is running
-            source "$scriptDir/assertNginx.sh"
+            # source "$scriptDir/assertNginx.sh"
+
+
+            dir="$branchPath/.deploy/$installEnv/nginx/*"
+
+            for filePath in $dir
+            do
+                fileName=$(basename "$filePath")
+                echo -e "\e[92mInstalling the nginx host $fileName ...\033[0m"
+
+                # replace config, create symlink
+                sudo cp $filePath "/etc/nginx/sites-available/$fileName"
+
+                if [ ! -L "/etc/nginx/sites-enabled/$fileName" ]; then
+                    sudo ln -s "/etc/nginx/sites-available/$fileName" "/etc/nginx/sites-enabled/$fileName"
+                fi
+            done
 
             # reload
-            service nginx reload
+            sudo service nginx reload
         fi
 
 
 
 
+        # check if upstart is used
+        [[ `/sbin/init --version` =~ upstart ]] > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            # check if we need to setup a system service
+            if [ -d "$branchPath/.deploy/$installEnv/upstart" ]; then
 
-        # check if we need to setup a system service
-        if [ -f "$branchPath/.service.staging.conf" ]; then
-            serviceScript="/etc/init/$serviceName.conf"
+                dir="$branchPath/.deploy/$installEnv/upstart/*"
 
-            # do we need to install the service?
-            if [ ! -f "$serviceScript" ]; then
-                echo -e "\e[92mInstalling the service $serviceName ...\033[0m"
-                cp "$branchPath/.service.staging.conf" "$serviceScript"
+                for filePath in $dir
+                do
+                    fileName=$(basename "$filePath")
+                    serviceName=$(basename "$filePath" .conf)
+
+                    echo -e "\e[92mInstalling the upstart service $serviceName ...\033[0m"
+
+                    sudo cp $filePath "/etc/init/$serviceName.conf"
+
+                    # stop the service
+                    sudo stop $serviceName
+
+                    # start service
+                    sudo start $serviceName
+                done
             fi
-
-            # stop the service
-            stop "$serviceName"
-
-            ## start service
-            start "$serviceName"
         fi
+
+
+
+
+
+        # systemd
+        [[ `systemctl` =~ -\.mount ]] > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            # check if we need to setup a system service
+            if [ -d "$branchPath/.deploy/$installEnv/systemd" ]; then
+
+                dir="$branchPath/.deploy/$installEnv/systemd/*"
+
+                for filePath in $dir
+                do
+                    fileName=$(basename "$filePath")
+                    serviceName=$(basename "$filePath" .service)
+
+                    echo -e "\e[92mInstalling the systemd service $serviceName ...\033[0m"
+
+                    sed "s,%projectRoot,$branchPath,g" "$filePath" | sudo tee "/etc/systemd/system/$serviceName.service" > /dev/null
+
+                    # reload systemclt
+                    sudo systemctl daemon-reload
+
+                    # stop the service
+                    sudo systemctl stop $serviceName
+
+                    # start service
+                    sudo systemctl start $serviceName
+                done
+            fi
+        fi
+    else
+        echo -e "\e[33mBranch \e[34m$branch\e[33m has no .deploy folder, skipping it!\033[0m"
     fi
 done
+
+echo -e "\e[32mInstallation complete ...\033[0m"

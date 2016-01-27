@@ -7,4 +7,15 @@ if [ ! -f "$target" ]; then
     exit 1
 fi
 
-source "$HOME/apps/joinbox/codedeploy/master/src/autoDeploy.sh" $1 $2
+if [ ! -f "/etc/deployr/deployr.conf" ]; then
+    echo "missing the config file /etc/deployr/deployr.conf!"
+    exit 1
+fi
+
+
+
+# get environment
+installEnv=$(awk '/^env/{print $3}' /etc/deployr/deployr.conf)
+
+
+source "$HOME/apps/joinbox/codedeploy/master/src/autoDeploy.sh" $1 $2 $installEnv
