@@ -2,7 +2,7 @@
 
 target="$HOME/apps/joinbox/codedeploy/master/src/autoDeploy.sh"
 
-if [ ! -f target ]; then
+if [ ! -f "$target" ]; then
     echo "The deployr repository is missing! Cannot call $target"
     exit 1
 fi
