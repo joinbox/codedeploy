@@ -1,6 +1,6 @@
 #!/bin/bash
 
-target="$HOME/apps/joinbox/codedeploy/master/src/deploy.sh"
+target="$HOME/apps/joinbox/codedeploy/master/src/validate.sh"
 
 if [ ! -f "$target" ]; then
     echo "The deployr repository is missing! Cannot call $target"
@@ -18,4 +18,4 @@ fi
 installEnv=$(awk '/^env/{print $3}' /etc/deployr/deployr.conf)
 
 
-source "$HOME/apps/joinbox/codedeploy/master/src/deploy.sh" $1 $2 $installEnv
+source "$HOME/apps/joinbox/codedeploy/master/src/validate.sh" $1 $2 $installEnv

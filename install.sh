@@ -13,3 +13,6 @@ printf "[generic]\nenv = $1\n" > /etc/deployr/deployr.conf
 
 cp "./src/deployr" /usr/bin/deployr
 chmod +x /usr/bin/deployr
+
+cp "./src/validatr" /usr/bin/validatr
+chmod +x /usr/bin/validatr

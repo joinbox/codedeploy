@@ -73,7 +73,7 @@ for branch in "${branches[@]}"; do
         serviceName=$(echo "$vendor_$repository_$branch" | sed -r 's/([a-z]+)_([a-z])([a-z]+)/\1\U\2\L\3/')
 
         
-        echo -e "\e[92mChecking FOR branch $vendor/$repository:$branch ..."
+        echo -e "\e[92mChecking for branch $vendor/$repository:$branch ..."
 
         # create directories, clone git if required
         if [ ! -d "$branchPath" ]; then
@@ -96,9 +96,9 @@ for branch in "${branches[@]}"; do
 
 
         # execute install script if present
-        if [ -f "$branchPath/.deploy/$installEnv/autorelease.sh" ]; then
-            echo -e "\e[92mExecuting the $installEnv autorelease.sh file ...\033[0m"
-            source "$branchPath/.deploy/$installEnv/autorelease.sh" $branchPath $scriptDir
+        if [ -f "$branchPath/.deploy/$installEnv/release.sh" ]; then
+            echo -e "\e[92mExecuting the $installEnv release.sh file ...\033[0m"
+            source "$branchPath/.deploy/$installEnv/release.sh" $branchPath $scriptDir
         fi
 
 
